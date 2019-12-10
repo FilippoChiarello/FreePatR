@@ -1,27 +1,31 @@
-setwd("/Users/filippochiarello/Desktop/Technimeter")
+source("FreePatR.R")
+library(tidyverse)
+library(reshape2)
 
-my.dict <- read.delim("technimeter.txt")
+
+query_table <- read_delim("ket_list.csv", delim= ";") %>% 
+  group_by(KET_name) %>% 
+  mutate(query= str_c(english_name, Synonym, sep = "; ")) %>% 
+  mutate(query= ifelse(is.na(query), english_name, query)) %>% 
+  select(-english_name, -Synonym)
 
 
-MyDict <- c()
+query_table <- query_table %>% 
+  mutate(query= str_to_lower(query))  %>% 
+  mutate(query= str_replace_all(query, "; ", "' OR '")) %>% 
+  mutate(query= str_replace(query, "$", "'")) %>% 
+  mutate(query= str_replace(query, "^", "'")) %>% 
+  mutate(query= str_replace(query, " OR ''", ""))
+  
+Tech_Year <- matrix(nrow=nrow(query_table),ncol=10)
 
-for (i in 1:nrow(my.dict)){
-	MyDict <- c(MyDict, as.character(my.dict[i,1]))
-	
-	
-}
+colnames(Tech_Year) <- c("2008","2009","2010","2011","2012","2013","2014", "2015", "2016", "2017")
 
-#MyDict <- MyDict[200:400]
+rownames(Tech_Year) <- query_table[["KET_name"]]
 
-Tech_Year <- matrix(nrow=length(MyDict),ncol=10)
-
-colnames(Tech_Year) <- c("2005","2006","2007","2008","2009","2010","2011","2012","2013","2014")
-
-rownames(Tech_Year) <- MyDict
-
-for(i in 1:length(MyDict)){
-	for(y in 2005:2014){
-	Tech_Year[i,(y-2004)] <- countpaper(MyDict[i],y)
+for(i in 1:nrow(query_table)){
+	for(y in 2008:2017){
+	Tech_Year[i,(y-2007)] <- countpaper(query_table[[i, "query"]],y)
 	}
 }
 
@@ -37,27 +41,29 @@ for(i in 1:nrow(Tech_Year)){
 	
 }
 
-Tech_Year <- as.data.frame(Tech_Year)
+xlsx::write.xlsx(Tech_Year_backup, "Tech_Year.xlsx")
 
-df <- Tech_Year[1:100,]
-
-library(reshape2)
-library(ggplot2)
+df <- as.data.frame(Tech_Year)
 
 df$metadata <- row.names(df)
 
-df <- melt(df, "metadata")
-df$variable <- as.numeric(df$variable)
+df <- reshape2::melt(df, "metadata")
+df$variable <- as.integer(df$variable) + 2007
 df$metadata <- as.factor(df$metadata)
 
-ggplot(df, aes(variable, value)) + geom_point() + facet_grid(~ metadata)
-
-ggplot(data = df, aes(x=variable, y=value)) +
+g <- ggplot(data = df, aes(x=variable, y=value)) +
   geom_point() + 
   coord_cartesian(ylim = c(0, 1)) + 
   geom_smooth(aes(colour = metadata, fill = metadata))+
   facet_wrap( ~ metadata) +
-  theme(legend.position="none")
-
+  theme_bw() +
+  theme(legend.position="none") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab("") +
+  ylab("") +
+  scale_x_continuous(breaks=seq(2008, 2017, 2))
   
+
+ggsave(plot = g, filename = "union_cam_trends.pdf", width = 30, height = 20, units = "cm")
+ 
 
